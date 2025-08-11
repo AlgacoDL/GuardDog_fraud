@@ -2,19 +2,17 @@ name: agent
 on:
   workflow_dispatch: {}
 permissions:
-  contents: write        # allow commits/pushes
-  pull-requests: write   # allow opening PRs
+  contents: write
+  pull-requests: write
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false   # don’t auto-store a token in git config
+      - uses: actions/checkout@v4  # keep default persist-credentials: true
       - name: Run agent and open PR
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}  # for gh CLI
         run: |
           git config user.name  "repo-bot"
           git config user.email "repo-bot@users.noreply.github.com"
@@ -27,5 +25,4 @@ jobs:
           git commit -m "chore: agent update" || exit 0
           git push -u origin "$BRANCH"
 
-          # create PR with GitHub CLI (uses GITHUB_TOKEN automatically)
           gh pr create --fill --base main --head "$BRANCH"
