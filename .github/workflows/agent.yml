@@ -1,28 +1,59 @@
 name: agent
+
 on:
   workflow_dispatch: {}
+
 permissions:
   contents: write
   pull-requests: write
+
+concurrency:
+  group: agent
+  cancel-in-progress: true
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # keep default persist-credentials: true
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare base (latest main)
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+
       - name: Run agent and open PR
         env:
-          GH_TOKEN: ${{ github.token }}  # for gh CLI
+          GH_TOKEN: ${{ github.token }}  # gh CLI auth
         run: |
-          git config user.name  "repo-bot"
-          git config user.email "repo-bot@users.noreply.github.com"
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # --- your agent modifies files here ---
+          # === BEGIN: agent work ===
+          # Add your automated edits here (create/update files, run scripts, etc.)
+          # e.g., python scripts/agent.py
+          # === END: agent work ===
+
+          # Skip if no changes
+          if git diff --quiet; then
+            echo "No changes to commit. Exiting."
+            exit 0
+          fi
 
           BRANCH="agent/update-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "chore: agent update" || exit 0
+          git commit -m "chore(agent): automated update"
           git push -u origin "$BRANCH"
 
+          # Open PR into main
           gh pr create --fill --base main --head "$BRANCH"
+
+          # Optional: enable auto-merge (requires repo setting 'Allow auto-merge')
+          # PR_URL=$(gh pr view --json url -q .url)
+          # gh pr merge "$PR_URL" --merge --auto --delete-branch
