@@ -1,0 +1,31 @@
+name: agent
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write        # allow commits/pushes
+  pull-requests: write   # allow opening PRs
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # don’t auto-store a token in git config
+      - name: Run agent and open PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "repo-bot"
+          git config user.email "repo-bot@users.noreply.github.com"
+
+          # --- your agent modifies files here ---
+
+          BRANCH="agent/update-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: agent update" || exit 0
+          git push -u origin "$BRANCH"
+
+          # create PR with GitHub CLI (uses GITHUB_TOKEN automatically)
+          gh pr create --fill --base main --head "$BRANCH"
