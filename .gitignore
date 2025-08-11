@@ -1,0 +1,16 @@
+﻿node_modules/
+dist/
+.wrangler/
+.dev.vars
+__pycache__/
+.venv/
+.env
+.env.*
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage/
+*.bin
+k6/results/
+.vscode/
+.DS_Store

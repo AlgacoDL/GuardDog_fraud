@@ -1,0 +1,54 @@
+name = "guarddog-fraud-worker-dev"
+main = "src/index.ts"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# Mock KV namespaces for local development
+[[kv_namespaces]]
+binding = "IDEMPO_KV"
+id = "mock-idempo-kv"
+preview_id = "mock-idempo-kv"
+
+[[kv_namespaces]]
+binding = "UNINSTALLED_KV"
+id = "mock-uninstalled-kv"
+preview_id = "mock-uninstalled-kv"
+
+[[kv_namespaces]]
+binding = "IDEMPOTENCY_LEDGER"
+id = "mock-ledger-kv"
+preview_id = "mock-ledger-kv"
+
+[[kv_namespaces]]
+binding = "SHOP_STATUS"
+id = "mock-status-kv"
+preview_id = "mock-status-kv"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITS"
+id = "mock-rate-kv"
+preview_id = "mock-rate-kv"
+
+[[kv_namespaces]]
+binding = "DEGRADED_REQUESTS"
+id = "mock-degraded-kv"
+preview_id = "mock-degraded-kv"
+
+# Environment Variables for local development
+[vars]
+APP_SECRET = "devsecret"
+SCORING_API = "http://127.0.0.1:8000"
+FP_TARGET = "0.01"
+PROFIT_FN_EURO = "50"
+PROFIT_FP_EURO = "10"
+ENVIRONMENT = "development"
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Limits
+[limits]
+cpu_ms = 50
+memory_mb = 128

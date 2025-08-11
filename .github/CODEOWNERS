@@ -1,0 +1,35 @@
+# CODEOWNERS for GuardDog AI Fraud Advisory
+# 
+# @founder is the required reviewer for all changes
+# Specific directory assignments for better organization
+
+# Global default - @founder reviews everything
+* @founder
+
+# Worker directory (Cloudflare Worker for webhook ingestion)
+/worker/ @founder
+
+# API directory (FastAPI scoring service)
+/api/ @founder
+
+# Database directory (schemas, migrations, models)
+/db/ @founder
+
+# Jobs directory (background jobs, cron tasks)
+/jobs/ @founder
+
+# Web directory (dashboard, admin interface)
+/web/ @founder
+
+# Configuration and infrastructure
+/.github/ @founder
+/docker/ @founder
+/k6/ @founder
+/terraform/ @founder
+/deploy/ @founder
+
+# Documentation
+/docs/ @founder
+README.md @founder
+CONTEXT.md @founder
+

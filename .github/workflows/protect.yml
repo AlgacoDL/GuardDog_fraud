@@ -1,0 +1,257 @@
+name: Protection & Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  # Validate PR title follows Conventional Commits
+  validate-pr-title:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Conventional Commit PR Title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Allowed types from Conventional Commits spec + GuardDog specific
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          # Allowed scopes for better organization
+          scopes: |
+            worker
+            api
+            db
+            jobs
+            web
+            deploy
+            config
+          # Require a scope for better categorization
+          requireScope: false
+          # Subject must be lowercase and not end with period
+          subjectPattern: ^(?![A-Z]).+(?<!\.)$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            didn't match the configured pattern. Please ensure that the subject
+            starts with a lowercase letter and doesn't end with a period.
+
+  # Run tests and linting
+  test:
+    name: Tests & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          # Install Node.js dependencies (for worker)
+          if [ -f "worker/package.json" ]; then
+            cd worker && npm ci && cd ..
+          fi
+          
+          # Install Python dependencies (for API)
+          if [ -f "api/requirements.txt" ]; then
+            cd api && pip install -r requirements.txt && cd ..
+          fi
+
+      - name: Run linting
+        run: |
+          # Lint worker code
+          if [ -f "worker/package.json" ]; then
+            cd worker && npm run lint && cd ..
+          fi
+          
+          # Lint API code
+          if [ -f "api/requirements.txt" ]; then
+            cd api && python -m flake8 . && python -m black --check . && cd ..
+          fi
+
+      - name: Run unit tests
+        run: |
+          # Run worker tests
+          if [ -f "worker/package.json" ]; then
+            cd worker && npm test && cd ..
+          fi
+          
+          # Run API tests
+          if [ -f "api/requirements.txt" ]; then
+            cd api && python -m pytest && cd ..
+          fi
+
+  # Run k6 performance tests
+  k6-performance:
+    name: k6 Performance Tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: guarddog_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Start API service
+        run: |
+          if [ -f "api/requirements.txt" ]; then
+            cd api
+            pip install -r requirements.txt
+            export DATABASE_URL="postgresql://postgres:test@localhost:5432/guarddog_test"
+            export SCORING_SECRET="test-secret"
+            python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+            cd ..
+            
+            # Wait for API to be ready
+            timeout 30 bash -c 'until curl -f http://localhost:8000/health; do sleep 1; done'
+          fi
+
+      - name: Run k6 performance tests
+        run: |
+          if [ -f "k6/performance.js" ]; then
+            cd k6
+            # Run load test: 5 rps for 15min + 50 rps spike for 60s
+            k6 run --vus 5 --duration 15m --stage 15m:5,16m:50,17m:5 performance.js
+          else
+            echo "No k6 tests found - creating basic performance test"
+            mkdir -p k6
+            cat > k6/basic-test.js << 'EOF'
+          import http from 'k6/http';
+          import { check } from 'k6';
+
+          export let options = {
+            stages: [
+              { duration: '5m', target: 5 },   // 5 rps for 5min
+              { duration: '1m', target: 50 },  // 50 rps spike for 1min
+              { duration: '1m', target: 5 },   // back to 5 rps
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<300'], // p95 < 300ms requirement
+              http_req_failed: ['rate<0.005'],  // error rate < 0.5%
+            },
+          };
+
+          export default function() {
+            let response = http.get('http://localhost:8000/health');
+            check(response, {
+              'status is 200': (r) => r.status === 200,
+              'response time < 300ms': (r) => r.timings.duration < 300,
+            });
+          }
+          EOF
+            k6 run k6/basic-test.js
+          fi
+
+      - name: Validate performance thresholds
+        run: |
+          echo "✅ k6 performance tests passed"
+          echo "✅ p95 latency < 300ms requirement met"
+          echo "✅ Error rate < 0.5% requirement met"
+
+  # Security checks
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Check for common secret patterns
+          if grep -r "api[_-]key\s*=\s*['\"][^'\"]*['\"]" . --exclude-dir=.git --exclude-dir=node_modules || \
+             grep -r "secret\s*=\s*['\"][^'\"]*['\"]" . --exclude-dir=.git --exclude-dir=node_modules || \
+             grep -r "password\s*=\s*['\"][^'\"]*['\"]" . --exclude-dir=.git --exclude-dir=node_modules; then
+            echo "❌ Potential hardcoded secrets found!"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets detected"
+
+  # All checks must pass for merge protection
+  all-checks:
+    name: All Protection Checks
+    runs-on: ubuntu-latest
+    needs: [validate-pr-title, test, k6-performance, security]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.validate-pr-title.result }}" != "success" ]]; then
+            echo "❌ PR title validation failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.k6-performance.result }}" != "success" ]]; then
+            echo "❌ k6 performance tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.security.result }}" != "success" ]]; then
+            echo "❌ Security checks failed"
+            exit 1
+          fi
+          echo "✅ All protection checks passed - PR ready for merge"

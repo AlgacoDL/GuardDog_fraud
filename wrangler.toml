@@ -1,0 +1,107 @@
+name = "guarddog-fraud-worker"
+main = "worker/src/index.ts"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production]
+name = "guarddog-fraud-worker-prod"
+
+[env.staging]
+name = "guarddog-fraud-worker-staging"
+
+[env.development]
+name = "guarddog-fraud-worker-dev"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "IDEMPO_KV"
+id = "your-idempotency-kv-id"
+preview_id = "your-preview-idempotency-kv-id"
+
+[[kv_namespaces]]
+binding = "UNINSTALLED_KV"
+id = "your-uninstalled-kv-id"
+preview_id = "your-preview-uninstalled-kv-id"
+
+[[kv_namespaces]]
+binding = "IDEMPOTENCY_LEDGER"
+id = "your-idempotency-ledger-kv-id"
+preview_id = "your-preview-idempotency-ledger-kv-id"
+
+[[kv_namespaces]]
+binding = "SHOP_STATUS"
+id = "your-shop-status-kv-id"
+preview_id = "your-preview-shop-status-kv-id"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITS"
+id = "your-rate-limits-kv-id"
+preview_id = "your-preview-rate-limits-kv-id"
+
+[[kv_namespaces]]
+binding = "DEGRADED_REQUESTS"
+id = "your-degraded-requests-kv-id"
+preview_id = "your-preview-degraded-requests-kv-id"
+
+# Environment Variables
+[vars]
+# These will be set via wrangler secret put or environment variables
+APP_SECRET = "your-shopify-webhook-secret"
+SCORING_API = "https://your-scoring-api.com"
+
+# Legacy support
+# SHOPIFY_WEBHOOK_SECRET = "your-shopify-webhook-secret"
+# SCORING_API_URL = "https://your-scoring-api.com/score"
+# SCORING_API_SECRET = "your-scoring-api-secret"
+
+# Optional: Feature flags and configuration
+FP_TARGET = "0.01"
+PROFIT_FN_EURO = "50"
+PROFIT_FP_EURO = "10"
+
+# Worker Settings
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+[env.development.vars]
+ENVIRONMENT = "development"
+
+# Triggers
+[triggers]
+crons = []
+
+# Build Configuration
+[build]
+watch_dir = "worker/src"
+
+# Development
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Minify and bundle settings
+[build.upload]
+format = "modules"
+
+# Compatibility flags are already set at the top level
+
+# Limits
+[limits]
+cpu_ms = 50
+memory_mb = 128
+
+# Routes (if using custom domain)
+# [[env.production.routes]]
+# pattern = "webhooks.yourdomain.com/*"
+# zone_name = "yourdomain.com"
+
+# [[env.staging.routes]]
+# pattern = "webhooks-staging.yourdomain.com/*"
+# zone_name = "yourdomain.com"
+
+# [[env.development.routes]]
+# pattern = "webhooks-dev.yourdomain.com/*"
+# zone_name = "yourdomain.com"

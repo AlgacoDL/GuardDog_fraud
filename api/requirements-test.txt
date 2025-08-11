@@ -1,0 +1,4 @@
+# Test dependencies for GuardDog AI API
+pytest>=7.0.0
+pytest-cov>=4.0.0
+psycopg[binary]==3.2.9
